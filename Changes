@@ -1,5 +1,11 @@
 Revision history for Perl extension Win32::MultiLanguage.
 
+0.04  Sun Oct  3 08:00:00 2004
+	- added documentation for GetCodePageInfo constants
+	- added constants for GetCodePageInfo
+	- added GetCodePageInfo (lacks documentation)
+	- major code cleanup
+
 0.03  Sun Oct  3 03:00:00 2004
 	- fixed memory leak
 	- changed max number of code pages to 32
