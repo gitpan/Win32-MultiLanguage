@@ -3,22 +3,20 @@
 /* max number of code pages */
 #define MULTILANGUAGE_XS_NSCORES 32
 
+/* max number of code pages */
+#define MULTILANGUAGE_XS_DCPS    128
+
 /* :-( */
-#define MyCoCreateMlang(p) \
+#define MyCoCreateMlang(p, iid) \
     if (CoCreateInstance(&CLSID_CMultiLanguage, \
                          NULL, \
                          CLSCTX_ALL, \
-                         &IID_IMultiLanguage2, \
+                         iid, \
                          (VOID**)&p) != S_OK) \
     { \
         warn("CoCreateInstance failed\n"); \
         XSRETURN_EMPTY; \
     }
-
-#define MY_CLEANUP_AND_RETURN(p) \
-        IMultiLanguage2_Release(p); \
-        XSRETURN_EMPTY
-
 
 #define VC_EXTRALEAN
 #define CINTERFACE
@@ -68,6 +66,68 @@ SV* wchar2sv(LPCWSTR lpS, UINT nLen)
     return result;
 }
 
+LPWSTR sv2wchar(SV* sv, UINT* len)
+{
+    LPWSTR lpNew;
+	STRLEN svlen;
+	LPSTR lpOld;
+	int nRequired;
+	
+	if (!sv)
+	  return NULL;
+	  
+	if (!SvUTF8(sv))
+	{
+	    /* warn("non-utf8 data in sv2wchar\n"); */
+	}
+	
+	if(!len)
+	  return NULL;
+	
+	*len = 0;
+	
+	/* upgrade to utf-8 if necessary */
+	lpOld = SvPVutf8(sv, svlen);
+	
+	if (!svlen)
+	{
+	    New(42, lpNew, 1, WCHAR);
+	    lpNew[0] = 0;
+	    return lpNew;
+	}
+
+    nRequired = MultiByteToWideChar(65001, 0, lpOld, svlen, NULL, 0);
+    
+    if (!nRequired)
+    {
+        warn("Unexpected result from MultiByteToWideChar\n");
+        return NULL;
+    }
+
+    New(42, lpNew, nRequired + 1, WCHAR);
+
+    if (!lpNew)
+    {
+        warn("Insufficient memory\n");
+        return NULL;
+    }
+    
+    /* null-terminate string */
+    lpNew[nRequired] = 0;
+
+    if (!MultiByteToWideChar(65001, 0, lpOld, svlen, lpNew, nRequired))
+    {
+        warn("MultiByteToWideChar failed\n");
+        Safefree(lpNew);
+        return NULL;
+    }
+    
+    /* set length */
+    *len = nRequired;
+    
+    return lpNew;
+}
+
 MODULE = Win32::MultiLanguage       PACKAGE = Win32::MultiLanguage      
 
 PROTOTYPES: DISABLE
@@ -105,7 +165,7 @@ DetectInputCodepage(octets, ...)
     if (items > 2)
         dwPrefWinCodePage = (DWORD)SvIV(ST(2));
 
-    MyCoCreateMlang(p)
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
 
     pSrcStr = SvPV(octets, nOctets);
     cSrcSize = (INT)nOctets;
@@ -119,14 +179,17 @@ DetectInputCodepage(octets, ...)
                                              lpEncoding,
                                              &nScores);
 
+	/* no longer needed */
+    IMultiLanguage2_Release(p);
+
     if (hr == S_FALSE)
     {
-        MY_CLEANUP_AND_RETURN(p);
+        XSRETURN_EMPTY;
     }
     else if (hr == E_FAIL || hr != S_OK)
     {
         warn("An error occured while calling DetectInputCodepage\n");
-        MY_CLEANUP_AND_RETURN(p);
+        XSRETURN_EMPTY;
     }
     
     av = newAV();
@@ -143,8 +206,6 @@ DetectInputCodepage(octets, ...)
         av_push(av, newRV_noinc((SV*)hv));
     }
 
-    /**/
-    IMultiLanguage2_Release(p);
     XPUSHs(sv_2mortal(newRV_noinc((SV*)av)));
 
 void
@@ -161,18 +222,19 @@ GetRfc1766FromLcid(svLocale)
   PPCODE:
     lcidLocale = SvUV(svLocale);
 
-    MyCoCreateMlang(p)
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
     
     hr = IMultiLanguage2_GetRfc1766FromLcid(p, lcidLocale, &bstrRfc1766);
+    IMultiLanguage2_Release(p);
     
     if (hr == E_INVALIDARG)
     {
         warn("One or more of the arguments are invalid.\n");
-        MY_CLEANUP_AND_RETURN(p);
+        XSRETURN_EMPTY;
     }
     else if (hr == E_FAIL || hr != S_OK || !bstrRfc1766)
     {
-        MY_CLEANUP_AND_RETURN(p);
+        XSRETURN_EMPTY;
     }
     
     result = wchar2sv(bstrRfc1766, wcslen(bstrRfc1766));
@@ -182,7 +244,6 @@ GetRfc1766FromLcid(svLocale)
       but if this is not done here the application leaks memory, so we free it
     */
     SysFreeString(bstrRfc1766);
-    IMultiLanguage2_Release(p);
     XPUSHs(sv_2mortal(result));
 
 void
@@ -202,13 +263,16 @@ GetCodePageInfo(svCodePage, svLangId)
     uiCodePage = SvUV(svCodePage);
     LangId = SvUV(svLangId);
 
-    MyCoCreateMlang(p)
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
     
     hr = IMultiLanguage2_GetCodePageInfo(p, uiCodePage, LangId, &cpi);
 
+	/* no longer needed */
+    IMultiLanguage2_Release(p);
+
     if (hr != S_OK)
     {
-        MY_CLEANUP_AND_RETURN(p);
+        XSRETURN_EMPTY;
     }
     
     hv = newHV();
@@ -224,15 +288,144 @@ GetCodePageInfo(svCodePage, svLangId)
     hv_store(hv, "ProportionalFont", 16, wchar2sv(cpi.wszProportionalFont, wcslen(cpi.wszProportionalFont)), 0);
     hv_store(hv, "GDICharset",       10, newSViv(cpi.bGDICharset),                                           0);
 
-    IMultiLanguage2_Release(p);
     XPUSHs(sv_2mortal(newRV_noinc((SV*)hv)));
 
   /* todo: GetRfc1766Info */
   /* todo: GetFamilyCodePage */
-  /* todo: GetCodePageDescription */
-  /* todo: GetCharsetInfo */
-  /* todo: DetectOutboundCodePage */
 
+void
+GetCodePageDescription(svCodePage, svLcid)
+    SV* svCodePage
+    SV* svLcid
+
+  PREINIT:
+    UINT uiCodePage;
+    LCID lcid;
+    WCHAR lpWideCharStr[MAX_MIMECP_NAME];
+    int cchWideChar = MAX_MIMECP_NAME;
+    IMultiLanguage2* p;
+    HRESULT hr;
+
+  PPCODE:
+  
+    uiCodePage = SvUV(svCodePage);
+    lcid = SvUV(svLcid);
+
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+
+    hr = IMultiLanguage2_GetCodePageDescription(p, uiCodePage, lcid, lpWideCharStr, cchWideChar);
+    
+    IMultiLanguage2_Release(p);
+    
+    if (hr != S_OK)
+    {
+        XSRETURN_EMPTY;
+    }
+
+    XPUSHs(sv_2mortal(wchar2sv(lpWideCharStr, wcslen(lpWideCharStr))));
+  
+void
+GetCharsetInfo(svCharset)
+    SV* svCharset
+    
+  PREINIT:
+    HV* hv;
+    MIMECSETINFO csi;
+    IMultiLanguage2* p;
+    BSTR bstrCharset;
+    UINT len;
+    HRESULT hr;
+    
+  PPCODE:
+
+    bstrCharset = (BSTR)sv2wchar(svCharset, &len);
+    
+    if (!bstrCharset)
+    {
+        warn("conversion to wide string failed\n");
+        XSRETURN_EMPTY;
+    }
+    
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    hr = IMultiLanguage2_GetCharsetInfo(p, bstrCharset, &csi);
+
+    /* no longer needed */
+    Safefree(bstrCharset);
+    IMultiLanguage2_Release(p);
+    
+    if (hr != S_OK)
+    {
+        XSRETURN_EMPTY;
+    }
+    
+    hv = newHV();
+    hv_store(hv, "CodePage",          8, newSVuv(csi.uiCodePage),                          0);
+    hv_store(hv, "InternetEncoding", 16, newSVuv(csi.uiInternetEncoding),                  0);
+    hv_store(hv, "Charset",           7, wchar2sv(csi.wszCharset, wcslen(csi.wszCharset)), 0);
+
+    XPUSHs(sv_2mortal(newRV_noinc((SV*)hv)));
+
+void
+DetectOutboundCodePage(sv, ...)
+    SV* sv
+
+  PREINIT:
+    DWORD dwFlags = 0;
+    LPWSTR lpWideCharStr = NULL;
+    UINT cchWideChar = 0;
+    UINT* puiPreferredCodePages = NULL;
+    UINT nPreferredCodePages = 0;
+    UINT puiDetectedCodePages[MULTILANGUAGE_XS_DCPS];
+    UINT nDetectedCodePages = MULTILANGUAGE_XS_DCPS;
+    LPWSTR wcSpecialChar = NULL;
+    HRESULT hr;
+    IMultiLanguage3* p;
+    UINT i;
+    
+  PPCODE:
+  
+    if (items > 1)
+        dwFlags = (DWORD)SvIV(ST(1));
+
+    if (items > 2)
+    {
+        warn("Third parameter not yet implemented\n");
+    }
+    
+    lpWideCharStr = sv2wchar(sv, &cchWideChar);
+    
+    if (!lpWideCharStr)
+    {
+        warn("Conversion to wide string failed\n");
+        XSRETURN_EMPTY;
+    }
+    
+    MyCoCreateMlang(p, &IID_IMultiLanguage3)
+
+    hr = IMultiLanguage3_DetectOutboundCodePage(p,
+                                                dwFlags,
+                                                lpWideCharStr,
+                                                cchWideChar, 
+                                                puiPreferredCodePages, 
+                                                nPreferredCodePages,
+                                                puiDetectedCodePages,
+                                                &nDetectedCodePages,
+                                                wcSpecialChar);
+
+    /* no longer needed */
+	Safefree(lpWideCharStr);
+    IMultiLanguage3_Release(p);
+
+    if (hr != S_OK || !nDetectedCodePages)
+    {
+        XSRETURN_EMPTY;
+    }
+    
+    for (i = 0; i < nDetectedCodePages; ++i)
+    {
+        XPUSHs(sv_2mortal(newSViv(puiDetectedCodePages[i])));
+    }
+    
 void
 END()
   CODE:
