@@ -1,5 +1,11 @@
 Revision history for Perl extension Win32::MultiLanguage.
 
+0.03  Sun Oct  3 03:00:00 2004
+	- fixed memory leak
+	- changed max number of code pages to 32
+	- static memory allocation for detected codepages
+	- added GetRfc1766FromLcid (lacks documentation)
+
 0.02  Sat Oct  2 23:19:20 2004
 	- removed debug warn() on read bytes
 
