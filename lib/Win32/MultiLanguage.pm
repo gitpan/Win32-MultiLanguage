@@ -13,7 +13,7 @@ use constant MLDETECTCP_8BIT => 2;
 use constant MLDETECTCP_DBCS => 4;
 use constant MLDETECTCP_HTML => 8;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 require XSLoader;
 XSLoader::load('Win32::MultiLanguage', $VERSION);

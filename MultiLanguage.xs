@@ -86,8 +86,6 @@ DetectInputCodepage(octets, ...)
         XSRETURN_EMPTY;
     }
     
-    warn("Read %d bytes\n", cSrcSize);
-
     av = newAV();
 
     for (i = 0; i < nScores; ++i)

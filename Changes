@@ -1,5 +1,8 @@
 Revision history for Perl extension Win32::MultiLanguage.
 
+0.02  Sat Oct  2 23:19:20 2004
+	- removed debug warn() on read bytes
+
 0.01  Sat Oct  2 20:33:20 2004
 	- original version; created by h2xs 1.23 with options
 		-A -O -c -n Win32::MultiLanguage --skip-ppport --skip-exporter -v 0.01 -b 5.8.0
