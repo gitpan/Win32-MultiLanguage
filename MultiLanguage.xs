@@ -261,7 +261,7 @@ GetCodePageInfo(svCodePage, svLangId)
 
   PPCODE:
     uiCodePage = SvUV(svCodePage);
-    LangId = SvUV(svLangId);
+    LangId = (LANGID)SvUV(svLangId);
 
     MyCoCreateMlang(p, &IID_IMultiLanguage2)
     
@@ -425,7 +425,161 @@ DetectOutboundCodePage(sv, ...)
     {
         XPUSHs(sv_2mortal(newSViv(puiDetectedCodePages[i])));
     }
+
+SV*
+IsConvertible(svSrcEncoding, svDstEncoding)
+    SV* svSrcEncoding
+    SV* svDstEncoding
+
+  PREINIT:
+    DWORD dwSrcEncoding;
+    DWORD dwDstEncoding;
+    HRESULT hr;
+    IMultiLanguage2* p;
+
+  CODE:
+    dwSrcEncoding = (DWORD)SvUV(svSrcEncoding);
+    dwDstEncoding = (DWORD)SvUV(svDstEncoding);
     
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    hr = IMultiLanguage2_IsConvertible(p, dwSrcEncoding, dwDstEncoding);
+    IMultiLanguage2_Release(p);
+
+    if (hr == S_FALSE)
+        XSRETURN_NO;
+        
+    if (hr == S_OK)
+        XSRETURN_YES;
+        
+    XSRETURN_UNDEF;
+
+void
+GetRfc1766Info(svLocale, svLangId)
+    SV* svLocale
+    SV* svLangId
+
+  PREINIT:
+    RFC1766INFO Rfc1766Info;
+    LCID Locale;
+    LANGID LangId;
+    HRESULT hr;
+    HV* hv;
+    IMultiLanguage2* p;
+    
+  PPCODE:
+    Locale = (LCID)SvUV(svLocale);
+    LangId = (LANGID)SvUV(svLangId);
+    
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    hr = IMultiLanguage2_GetRfc1766Info(p, Locale, LangId, &Rfc1766Info);
+    IMultiLanguage2_Release(p);
+    
+    if (hr != S_OK)
+    {
+        XSRETURN_EMPTY;
+    }
+    
+    hv = newHV();
+    
+    hv_store(hv, "Lcid",        4, newSVuv(Rfc1766Info.lcid),                                              0);
+    hv_store(hv, "Rfc1766",     7, wchar2sv(Rfc1766Info.wszRfc1766, wcslen(Rfc1766Info.wszRfc1766)),       0);
+    hv_store(hv, "LocaleName", 10, wchar2sv(Rfc1766Info.wszLocaleName, wcslen(Rfc1766Info.wszLocaleName)), 0);
+
+    XPUSHs(sv_2mortal(newRV_noinc((SV*)hv)));
+
+void
+GetLcidFromRfc1766(svRfc1766)
+    SV* svRfc1766
+
+  PREINIT:
+    LCID Locale;
+    BSTR bstrRfc1766;
+    HRESULT hr;
+    IMultiLanguage2* p;
+    UINT len;
+  
+  PPCODE:
+  
+    bstrRfc1766 = sv2wchar(svRfc1766, &len);
+    
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    hr = IMultiLanguage2_GetLcidFromRfc1766(p, &Locale, bstrRfc1766);
+    IMultiLanguage2_Release(p);
+    Safefree(bstrRfc1766);
+    
+    if (hr != S_FALSE && hr != S_OK)
+    {
+        XSRETURN_EMPTY;
+    }
+    
+    XPUSHs(sv_2mortal(newSViv( Locale )));
+    XPUSHs(sv_2mortal(newSViv( hr == S_FALSE )));
+
+void
+GetFamilyCodePage(svCodePage)
+    SV* svCodePage
+  PREINIT:
+    HRESULT hr;
+    IMultiLanguage2* p;
+	UINT uiCodePage;
+	UINT uiFamilyCodePage;
+
+  PPCODE:
+    uiCodePage = SvUV(svCodePage);
+    
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    hr = IMultiLanguage2_GetFamilyCodePage(p, uiCodePage, &uiFamilyCodePage);
+    IMultiLanguage2_Release(p);
+    
+    if (hr != S_OK)
+    {
+        XSRETURN_EMPTY;
+    }
+    
+    XPUSHs(sv_2mortal(newSViv( uiFamilyCodePage )));
+
+void
+GetNumberOfCodePageInfo()
+
+  PREINIT:
+    HRESULT hr;
+    IMultiLanguage2* p;
+	UINT uiCodePage = 0;
+
+  PPCODE:
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    hr = IMultiLanguage2_GetNumberOfCodePageInfo(p, &uiCodePage);
+    IMultiLanguage2_Release(p);
+    
+    if (hr != S_OK)
+    {
+        XSRETURN_EMPTY;
+    }
+    
+    XPUSHs(sv_2mortal(newSViv( uiCodePage )));
+
+void
+GetNumberOfScripts()
+
+  PREINIT:
+    HRESULT hr;
+    IMultiLanguage2* p;
+	UINT nScripts = 0;
+
+  PPCODE:
+    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    hr = IMultiLanguage2_GetNumberOfScripts(p, &nScripts);
+    IMultiLanguage2_Release(p);
+    
+    if (hr != S_OK)
+    {
+        XSRETURN_EMPTY;
+    }
+    
+    XPUSHs(sv_2mortal(newSViv( nScripts )));
+
+
+
 void
 END()
   CODE:

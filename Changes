@@ -1,5 +1,16 @@
 Revision history for Perl extension Win32::MultiLanguage.
 
+0.06  Sun Oct  3 23:54:00 2004
+	- added GetNumberOfScripts
+	- added GetNumberOfCodePageInfo
+	- known issues/todo in documentation
+	- removed version number from README
+	- added GetFamilyCodePage
+	- some methods no longer considered for implementation
+	- added GetLcidFromRfc1766
+	- added GetRfc1766Info
+	- added IsConvertible
+
 0.05  Sun Oct  3 20:40:00 2004
 	- added MLDETECTF constants
 	- added documentation for MLDETECTF constants

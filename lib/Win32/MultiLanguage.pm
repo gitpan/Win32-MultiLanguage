@@ -38,7 +38,7 @@ use constant MLDETECTF_PRESERVE_ORDER     => 0x00000010;
 use constant MLDETECTF_PREFERRED_ONLY     => 0x00000020;
 use constant MLDETECTF_FILTER_SPECIALCHAR => 0x00000040;
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 require XSLoader;
 XSLoader::load('Win32::MultiLanguage', $VERSION);
@@ -67,7 +67,81 @@ Windows IMultiLanguage interfaces that comes with Internet
 Explorer version 4 and later. Mlang.dll implements routines for
 dealing with character encodings, code pages, and locales.
 
+=head1 ROUTINES
+
+=over 4
+
+=item DetectInputCodepage($octets [, $flags [, $codepage]])
+
+Detects the code page of the given string $octets. An optional
+$flags parameter may be specified, a combination of C<MLDETECTCP>
+constants as defined above, if not specified C<MLDETECTCP_NONE>
+will be used as default. An optional $codepage can also be
+specified, if this value is set to zero, this API returns all
+possible encodings. Otherwise, it lists only those encodings
+related to this parameter. The default is zero.
+
+It will return a reference to an array of hash references of
+which each represents a C<DetectEncodingInfo> strucure with the
+following keys
+
+  LangID     => ..., # primary language identifier
+  CodePage   => ..., # detected Win32-defined code page
+  DocPercent => ..., # Percentage in the detected language
+  Confidence => ..., # degree to which the detected data is correct
+
+See L<http://msdn.microsoft.com/workshop/misc/mlang/reference/structures/detectencodinginfo.asp>
+for details.
+
+=item GetCodePageInfo($codepage, $langid)
+
+...
+
+=item GetCodePageDescription($codepage, $locale)
+
+...
+
+=item GetRfc1766FromLcid($locale)
+
+...
+
+=item DetectOutboundCodePage($utf8 [, $flags [, \@cp ]])
+
+...
+
+=item GetCharsetInfo($charset)
+
+...
+
+=item IsConvertible($src, $dst)
+
+...
+
+=item GetRfc1766Info($locale, $langid)
+
+...
+
+=item GetLcidFromRfc1766($rfc1766)
+
+...
+
+=item GetFamilyCodePage($codepage)
+
+...
+
+=item GetNumberOfCodePageInfo()
+
+...
+
+=item GetNumberOfScripts()
+
+...
+
+=back
+
 =head1 CONSTANTS
+
+These are currently not exported/exportable.
 
 =head2 MLDETECTCP
 
@@ -200,54 +274,6 @@ Filter out graphical symbols and punctuation.
 
 =back
 
-=head1 ROUTINES
-
-=over 4
-
-=item DetectInputCodepage($octets [, $flags [, $codepage]])
-
-Detects the code page of the given string $octets. An optional
-$flags parameter may be specified, a combination of C<MLDETECTCP>
-constants as defined above, if not specified C<MLDETECTCP_NONE>
-will be used as default. An optional $codepage can also be
-specified, if this value is set to zero, this API returns all
-possible encodings. Otherwise, it lists only those encodings
-related to this parameter. The default is zero.
-
-It will return a reference to an array of hash references of
-which each represents a C<DetectEncodingInfo> strucure with the
-following keys
-
-  LangID     => ..., # primary language identifier
-  CodePage   => ..., # detected Win32-defined code page
-  DocPercent => ..., # Percentage in the detected language
-  Confidence => ..., # degree to which the detected data is correct
-
-See L<http://msdn.microsoft.com/workshop/misc/mlang/reference/structures/detectencodinginfo.asp>
-for details.
-
-=item GetCodePageInfo($codepage, $langid)
-
-...
-
-=item GetCodePageDescription($codepage, $locale)
-
-...
-
-=item GetRfc1766FromLcid($locale)
-
-...
-
-=item DetectOutboundCodePage($utf8 [, $flags [, \@cp ]])
-
-...
-
-=item GetCharsetInfo($charset)
-
-...
-
-=back
-
 =head1 IMPLEMENTATION STATUS
 
   Legend:
@@ -259,14 +285,17 @@ for details.
   IMultiLanguage
     + GetCharsetInfo
     + GetRfc1766FromLcid
-    ? GetNumberOfCodePageInfo
-    ? GetFamilyCodePage
-    ? EnumCodePages
-    ? IsConvertible
+    + IsConvertible
+    + GetRfc1766Info
+    + GetLcidFromRfc1766
+    + GetFamilyCodePage
+    + GetNumberOfCodePageInfo
+    
     ? ConvertString
-    ? GetLcidFromRfc1766
+
+    ? EnumCodePages
     ? EnumRfc1766
-    ? GetRfc1766Info
+    
     - ConvertStringToUnicode
     - ConvertStringFromUnicode
     - ConvertStringReset
@@ -276,11 +305,13 @@ for details.
     + GetCodePageInfo
     + DetectInputCodepage
     + GetCodePageDescription
-    ? ValidateCodePage
-    ? IsCodePageInstallable
-    ? GetNumberOfScripts
+    + GetNumberOfScripts
+
     ? EnumScripts
-    ? ValidateCodePageEx
+    
+    - ValidateCodePage
+    - ValidateCodePageEx
+    - IsCodePageInstallable
     - ConvertStringInIStream
     - ConvertStringToUnicodeEx
     - ConvertStringFromUnicodeEx
@@ -289,7 +320,42 @@ for details.
     
   IMultiLanguage3
     + DetectOutboundCodePage
+    
     - DetectOutboundCodePageInIStream
+
+=head1 KNOWN ISSUES AND TODO
+
+=over 4
+
+=item * needs a test suite
+
+=item * needs more checks on input params
+
+=item * could benefit from some typemap entries
+
+=item * creating a new IML instance each time is sub-optimal
+
+=item * what happens if IE4+ is not installed?
+
+=item * needs more documentation
+
+=item * no access to DetectOutboundCodePage wcSpecialChar arg
+
+=item * GetLcidFromRfc1766 could check wantarray
+
+=item * export constants and/or methods
+
+=item * pointers to MSDN for each constant/method
+
+=item * use IMultiLanguage rather than IML2 for IML methods
+
+=item * add proper synopsis
+
+=back
+
+=head1 SUPPORT
+
+...
 
 =head1 SEE ALSO
 
@@ -305,10 +371,7 @@ This is pre-alpha software.
 
 =head1 AUTHOR AND COPYRIGHT
 
-Copyright (C) 2004 by Bjoern Hoehrmann E<lt>bjoern@hoehrmann.deE<gt>.
-
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.2 or,
-at your option, any later version of Perl 5 you may have available.
+  Copyright (c) 2004 Bjoern Hoehrmann <bjoern@hoehrmann.de>.
+  This module is licensed under the same terms as Perl itself.
 
 =cut

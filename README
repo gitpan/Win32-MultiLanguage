@@ -1,5 +1,5 @@
-Win32-MultiLanguage version 0.01
-================================
+Win32-MultiLanguage Perl extension
+==================================
 
 Win32::MultiLanguage is an experimental wrapper module for the
 Windows IMultiLanguage interfaces that comes with Internet
