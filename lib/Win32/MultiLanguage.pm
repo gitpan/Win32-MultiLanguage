@@ -38,7 +38,7 @@ use constant MLDETECTF_PRESERVE_ORDER     => 0x00000010;
 use constant MLDETECTF_PREFERRED_ONLY     => 0x00000020;
 use constant MLDETECTF_FILTER_SPECIALCHAR => 0x00000040;
 
-our $VERSION = '0.70';
+our $VERSION = '0.71';
 
 require XSLoader;
 XSLoader::load('Win32::MultiLanguage', $VERSION);
@@ -357,7 +357,7 @@ via L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Win32-MultiLanguage>
 
 =back
 
-=head1 AUTHOR AND COPYRIGHT
+=head1 AUTHOR / COPYRIGHT / LICENSE
 
   Copyright (c) 2004-2008 Bjoern Hoehrmann <bjoern@hoehrmann.de>.
   This module is licensed under the same terms as Perl itself.

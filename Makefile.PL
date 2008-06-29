@@ -17,4 +17,9 @@ WriteMakefile(
     # OBJECT            => '$(O_FILES)', # link all the C files too
 
     LICENSE           => 'perl',
+    'dist'            => {
+      PREOP     => 'chmod 600 Makefile.PL',
+      TARFLAGS	=> '--group=cpan --owner=bjoern -cvf',
+    },
+
 );

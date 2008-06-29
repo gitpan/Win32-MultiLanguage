@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Win32-MultiLanguage
-version:             0.70
+version:             0.71
 abstract:            Interface to IMultiLanguage I18N routines
 license:             perl
 author:              

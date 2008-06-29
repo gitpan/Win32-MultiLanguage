@@ -5,5 +5,8 @@ MultiLanguage.xs
 README
 t/01Basic.t
 t/05Transcode.t
+t/98Podsyn.t
+t/99Podcov.t
 lib/Win32/MultiLanguage.pm
+eg/encenum.pl
 META.yml                                 Module meta-data (added by MakeMaker)
