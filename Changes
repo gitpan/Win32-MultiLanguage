@@ -1,5 +1,19 @@
 Revision history for Perl extension Win32::MultiLanguage.
 
+0.70  Sun Jun 29 16:54:00 2008
+	- added documentation for many routines
+	- added GetLcidFromRfc1766
+	- added GetRfc1766Info
+	- added EnumScripts
+	- added EnumRfc1766
+	- added EnumCodePages
+	- added Transcode
+	- added 05Transcode.t tests
+	- rewrote internal utf-16 to utf-8 converter
+	- fixed broken link to MSDN...
+	- add LICENSE => 'perl' to Makefile.PL
+	- cleanup
+
 0.06  Sun Oct  3 23:54:00 2004
 	- added GetNumberOfScripts
 	- added GetNumberOfCodePageInfo

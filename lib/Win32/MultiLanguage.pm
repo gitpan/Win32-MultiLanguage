@@ -38,7 +38,7 @@ use constant MLDETECTF_PRESERVE_ORDER     => 0x00000010;
 use constant MLDETECTF_PREFERRED_ONLY     => 0x00000020;
 use constant MLDETECTF_FILTER_SPECIALCHAR => 0x00000040;
 
-our $VERSION = '0.06';
+our $VERSION = '0.70';
 
 require XSLoader;
 XSLoader::load('Win32::MultiLanguage', $VERSION);
@@ -85,25 +85,38 @@ It will return a reference to an array of hash references of
 which each represents a C<DetectEncodingInfo> strucure with the
 following keys
 
-  LangID     => ..., # primary language identifier
-  CodePage   => ..., # detected Win32-defined code page
-  DocPercent => ..., # Percentage in the detected language
-  Confidence => ..., # degree to which the detected data is correct
+  'LangID'     => ..., # primary language identifier
+  'CodePage'   => ..., # detected Win32-defined code page
+  'DocPercent' => ..., # Percentage in the detected language
+  'Confidence' => ..., # degree to which the detected data is correct
 
-See L<http://msdn.microsoft.com/workshop/misc/mlang/reference/structures/detectencodinginfo.asp>
-for details.
+=item GetCodePageInfo($codepage, $langid = GetUserDefaultLangID())
 
-=item GetCodePageInfo($codepage, $langid)
+Returns a hash reference describing $codepage if known with strings in $langid,
+for example:
 
-...
+  'GDICharset'       => 1,
+  'HeaderCharset'    => 'utf-8',
+  'Flags'            => 805701387,
+  'WebCharset'       => 'utf-8',
+  'CodePage'         => 65001,
+  'ProportionalFont' => 'Arial',
+  'BodyCharset'      => 'utf-8',
+  'Description'      => 'Unicode (UTF-8)',
+  'FixedWidthFont'   => 'Courier New',
+  'FamilyCodePage'   => 1200
 
-=item GetCodePageDescription($codepage, $locale)
+=item GetCodePageDescription($codepage, $locale = GetUserDefaultLCID())
 
-...
+Returns a human-readable description of $codepage in $locale, for example,
 
-=item GetRfc1766FromLcid($locale)
+  Western European (Windows)
+  
+for Windows-1252 in 1033 (English (United States)).
 
-...
+=item GetRfc1766FromLcid($lcid = GetUserDefaultLCID())
+
+Get the RFC 1766 identifier that corresponds to $lcid.
 
 =item DetectOutboundCodePage($utf8 [, $flags [, \@cp ]])
 
@@ -111,31 +124,66 @@ for details.
 
 =item GetCharsetInfo($charset)
 
-...
+If the $charset string is known, returns a hash reference like this:
 
-=item IsConvertible($src, $dst)
+  InternetEncoding => 65001,
+  CodePage         => 1200,
+  Charset          => 'utf-8'
 
-...
+Returns nothing if the encoding is unknown.
 
-=item GetRfc1766Info($locale, $langid)
+=item IsConvertible($CodePageIn, $CodePageOut)
 
-...
+Checks if transcoding from $CodePageIn to $CodePageOut can be performed. 
+
+=item GetRfc1766Info($lcid = GetUserDefaultLCID(), $langid = GetUserDefaultLangID())
+
+Information about the $lcid in $langid, for example
+
+  'Lcid'       => 1033,
+  'LocaleName' => 'English (United States)',
+  'Rfc1766'    => 'en-us'
 
 =item GetLcidFromRfc1766($rfc1766)
 
-...
+Get the locale identifier that corresponds to the $rfc1766 identifier.
+Also returns a second value indicating whether "The returned LCID matches
+the primary language of the RFC1766-conforming name only" [@@ in list context];
 
 =item GetFamilyCodePage($codepage)
 
-...
+The family code page that corresponds to $codepage.
 
 =item GetNumberOfCodePageInfo()
 
-...
+The number of available code pages.
 
 =item GetNumberOfScripts()
 
-...
+The number of available scripts.
+
+=item EnumCodePages($flags = 0, $langid = GetUserDefaultLangID())
+
+Returns a list of code page information hash references matching $flags
+with strings in $langid.
+
+=item EnumScripts($flags = 0, $langid = GetUserDefaultLangID())
+
+Returns a list of script information hash references matching $flags
+with strings in $langid.
+
+=item EnumRfc1766($langid = GetUserDefaultLangID())
+
+Returns a list of RFC 1766 information hash references with strings in $langid.
+
+=item Transcode($CodePageIn, $CodePageOut, $String, $Flags)
+
+Uses the IMLangConvertCharset::DoConversion method to convert between
+the two code pages. Sets the UTF-8 flag if CodePageOut == CP_UTF8 and
+croaks if the conversion is not supported. Returns nothing if it fails.
+It seems the empty string cannot be transcoded by DoConversion, so do
+not pass the empty string to it, unless you handle the failure in some
+way.
 
 =back
 
@@ -274,70 +322,17 @@ Filter out graphical symbols and punctuation.
 
 =back
 
-=head1 IMPLEMENTATION STATUS
-
-  Legend:
-
-    + means is implemented
-    ? means might get implemented
-    - means unlikely that this gets implemented
-
-  IMultiLanguage
-    + GetCharsetInfo
-    + GetRfc1766FromLcid
-    + IsConvertible
-    + GetRfc1766Info
-    + GetLcidFromRfc1766
-    + GetFamilyCodePage
-    + GetNumberOfCodePageInfo
-    
-    ? ConvertString
-
-    ? EnumCodePages
-    ? EnumRfc1766
-    
-    - ConvertStringToUnicode
-    - ConvertStringFromUnicode
-    - ConvertStringReset
-    - CreateConvertCharset
-    
-  IMultiLanguage2
-    + GetCodePageInfo
-    + DetectInputCodepage
-    + GetCodePageDescription
-    + GetNumberOfScripts
-
-    ? EnumScripts
-    
-    - ValidateCodePage
-    - ValidateCodePageEx
-    - IsCodePageInstallable
-    - ConvertStringInIStream
-    - ConvertStringToUnicodeEx
-    - ConvertStringFromUnicodeEx
-    - DetectCodepageInIStream
-    - SetMimeDBSource
-    
-  IMultiLanguage3
-    + DetectOutboundCodePage
-    
-    - DetectOutboundCodePageInIStream
-
 =head1 KNOWN ISSUES AND TODO
 
 =over 4
 
-=item * needs a test suite
+=item * needs more tests in the test suite
 
 =item * needs more checks on input params
 
 =item * could benefit from some typemap entries
 
-=item * creating a new IML instance each time is sub-optimal
-
-=item * what happens if IE4+ is not installed?
-
-=item * needs more documentation
+=item * some documentation is still missing
 
 =item * no access to DetectOutboundCodePage wcSpecialChar arg
 
@@ -345,33 +340,26 @@ Filter out graphical symbols and punctuation.
 
 =item * export constants and/or methods
 
-=item * pointers to MSDN for each constant/method
-
-=item * use IMultiLanguage rather than IML2 for IML methods
-
 =item * add proper synopsis
 
 =back
 
 =head1 SUPPORT
 
-...
+Please report bugs via mail to bug-Win32-MultiLanguage@rt.cpan.org, or
+via L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Win32-MultiLanguage>
 
 =head1 SEE ALSO
 
 =over 4
 
-=item * L<http://msdn.microsoft.com/workshop/misc/mlang/mlang.asp>
+=item * L<http://msdn.microsoft.com/en-us/library/aa767865.aspx>
 
 =back
 
-=head1 WARNING
-
-This is pre-alpha software.
-
 =head1 AUTHOR AND COPYRIGHT
 
-  Copyright (c) 2004 Bjoern Hoehrmann <bjoern@hoehrmann.de>.
+  Copyright (c) 2004-2008 Bjoern Hoehrmann <bjoern@hoehrmann.de>.
   This module is licensed under the same terms as Perl itself.
 
 =cut

@@ -1,22 +1,13 @@
 /* $Id$ */
 
+/* TODO: make these dynamic instead */
 /* max number of code pages */
 #define MULTILANGUAGE_XS_NSCORES 32
 
 /* max number of code pages */
 #define MULTILANGUAGE_XS_DCPS    128
 
-/* :-( */
-#define MyCoCreateMlang(p, iid) \
-    if (CoCreateInstance(&CLSID_CMultiLanguage, \
-                         NULL, \
-                         CLSCTX_ALL, \
-                         iid, \
-                         (VOID**)&p) != S_OK) \
-    { \
-        warn("CoCreateInstance failed\n"); \
-        XSRETURN_EMPTY; \
-    }
+#define CreateMlang(p, iid) CoCreateInstance(&CLSID_CMultiLanguage, NULL, CLSCTX_ALL, iid, (VOID**)p)
 
 #define VC_EXTRALEAN
 #define CINTERFACE
@@ -31,70 +22,63 @@
 
 SV* wchar2sv(LPCWSTR lpS, UINT nLen)
 {
-    LPSTR strBuf;
-    int nRequired;
     SV* result;
+    unsigned int i = 0;
+    U8 temp[1024 * UTF8_MAXLEN + 1];
+    U8* d;
+    
+    if (nLen == 0)
+      nLen = wcslen(lpS);
 
-    /* determine size for character buffer first */
-    nRequired = WideCharToMultiByte(65001, 0, lpS, nLen, NULL, 0, NULL, NULL);
-    
-    if (!nRequired)
-    {
-        warn("Unexpected result from WideCharToMultiByte\n");
-        return &PL_sv_undef;
+    // faster version for short strings
+    if (nLen < 1024){
+        d = temp;
+        for (i = 0; i < nLen; ++i)
+            d = uvuni_to_utf8_flags(d, lpS[i], 0);
+        result = newSVpvn((const char*)temp, d - temp);
+    } else {
+        result = newSVpvn("", 0);
+        for (i = 0; i < nLen; ++i) {
+            d = (U8 *)SvGROW(result, SvCUR(result) + UTF8_MAXLEN + 1);
+            d = uvuni_to_utf8_flags(d + SvCUR(result), lpS[i], 0); 
+            SvCUR_set(result, d - (U8 *)SvPVX(result));
+        }
     }
 
-    New(42, strBuf, nRequired, char);
-    
-    if (!strBuf)
-    {
-        warn("Insufficient memory\n");
-        return &PL_sv_undef;
-    }
-    
-    if (!WideCharToMultiByte(65001, 0, lpS, nLen, strBuf, nRequired, NULL, NULL))
-    {
-        warn("WideCharToMultiByte failed\n");
-        Safefree(strBuf);
-        return &PL_sv_undef;
-    }
-    
-    result = newSV(0);
-    sv_usepvn(result, strBuf, nRequired);
     SvUTF8_on(result);
-
-    return result;
-}
+    return result;}
 
 LPWSTR sv2wchar(SV* sv, UINT* len)
 {
     LPWSTR lpNew;
-	STRLEN svlen;
-	LPSTR lpOld;
-	int nRequired;
-	
-	if (!sv)
-	  return NULL;
-	  
-	if (!SvUTF8(sv))
-	{
-	    /* warn("non-utf8 data in sv2wchar\n"); */
-	}
-	
-	if(!len)
-	  return NULL;
-	
-	*len = 0;
-	
-	/* upgrade to utf-8 if necessary */
-	lpOld = SvPVutf8(sv, svlen);
-	
-	if (!svlen)
-	{
-	    New(42, lpNew, 1, WCHAR);
-	    lpNew[0] = 0;
-	    return lpNew;
-	}
+    STRLEN svlen;
+    LPSTR lpOld;
+    int nRequired;
+    
+    /* TODO: This could use a replacement */
+    
+    if (!sv)
+      return NULL;
+      
+    if (!SvUTF8(sv))
+    {
+        /* warn("non-utf8 data in sv2wchar\n"); */
+    }
+    
+    if(!len)
+      return NULL;
+    
+    *len = 0;
+    
+    /* upgrade to utf-8 if necessary */
+    lpOld = SvPVutf8(sv, svlen);
+    
+    if (!svlen)
+    {
+        New(42, lpNew, 1, WCHAR);
+        lpNew[0] = 0;
+        return lpNew;
+    }
 
     nRequired = MultiByteToWideChar(65001, 0, lpOld, svlen, NULL, 0);
     
@@ -128,14 +112,56 @@ LPWSTR sv2wchar(SV* sv, UINT* len)
     return lpNew;
 }
 
-MODULE = Win32::MultiLanguage       PACKAGE = Win32::MultiLanguage      
+HV*
+MimeCpInfo2Sv(PMIMECPINFO pcpi) {
+    HV* hv = newHV();
+    
+    hv_store(hv, "Flags",             5, newSVuv(pcpi->dwFlags), 0);
+    hv_store(hv, "CodePage",          8, newSVuv(pcpi->uiCodePage), 0);
+    hv_store(hv, "FamilyCodePage",   14, newSVuv(pcpi->uiFamilyCodePage), 0);
+    hv_store(hv, "Description",      11, wchar2sv(pcpi->wszDescription, 0), 0);
+    hv_store(hv, "WebCharset",       10, wchar2sv(pcpi->wszWebCharset, 0), 0);
+    hv_store(hv, "HeaderCharset",    13, wchar2sv(pcpi->wszHeaderCharset, 0), 0);
+    hv_store(hv, "BodyCharset",      11, wchar2sv(pcpi->wszBodyCharset, 0), 0);
+    hv_store(hv, "FixedWidthFont",   14, wchar2sv(pcpi->wszFixedWidthFont, 0), 0);
+    hv_store(hv, "ProportionalFont", 16, wchar2sv(pcpi->wszProportionalFont, 0), 0);
+    hv_store(hv, "GDICharset",       10, newSViv(pcpi->bGDICharset), 0);
+
+    return hv;
+}
+
+HV*
+ScriptInfo2Sv(PSCRIPTINFO psi) {
+    HV* hv = newHV();
+    
+    hv_store(hv, "ScriptId",          8, newSVuv(psi->ScriptId), 0);
+    hv_store(hv, "CodePage",          8, newSVuv(psi->uiCodePage), 0);
+    hv_store(hv, "Description",      11, wchar2sv(psi->wszDescription, 0), 0);
+    hv_store(hv, "FixedWidthFont",   14, wchar2sv(psi->wszFixedWidthFont, 0), 0);
+    hv_store(hv, "ProportionalFont", 16, wchar2sv(psi->wszProportionalFont, 0), 0);
+
+    return hv;
+}
+
+HV*
+Rfc1766Info2Sv(PRFC1766INFO pRfc1766Info) {
+    HV* hv = newHV();
+    
+    hv_store(hv, "Lcid",        4, newSVuv(pRfc1766Info->lcid), 0);
+    hv_store(hv, "Rfc1766",     7, wchar2sv(pRfc1766Info->wszRfc1766, 0), 0);
+    hv_store(hv, "LocaleName", 10, wchar2sv(pRfc1766Info->wszLocaleName, 0), 0);
+
+    return hv;
+}
+
+MODULE = Win32::MultiLanguage PACKAGE = Win32::MultiLanguage      
 
 PROTOTYPES: DISABLE
 
 BOOT:
     if (CoInitialize(NULL) != S_OK)
     {
-        /* todo: check whether this is the best thing to do */
+        /* TODO: check whether this is the best thing to do */
         croak("CoInitialize failed\n");
         XSRETURN_NO;
     }
@@ -164,8 +190,11 @@ DetectInputCodepage(octets, ...)
 
     if (items > 2)
         dwPrefWinCodePage = (DWORD)SvIV(ST(2));
-
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+        
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
 
     pSrcStr = SvPV(octets, nOctets);
     cSrcSize = (INT)nOctets;
@@ -179,7 +208,7 @@ DetectInputCodepage(octets, ...)
                                              lpEncoding,
                                              &nScores);
 
-	/* no longer needed */
+    /* no longer needed */
     IMultiLanguage2_Release(p);
 
     if (hr == S_FALSE)
@@ -209,22 +238,23 @@ DetectInputCodepage(octets, ...)
     XPUSHs(sv_2mortal(newRV_noinc((SV*)av)));
 
 void
-GetRfc1766FromLcid(svLocale)
-    SV* svLocale
+GetRfc1766FromLcid(Lcid = GetUserDefaultLCID())
+    unsigned Lcid
 
   PREINIT:
     BSTR bstrRfc1766;
-    LCID lcidLocale;
     HRESULT hr;
     IMultiLanguage2* p;
     SV* result;
 
   PPCODE:
-    lcidLocale = SvUV(svLocale);
 
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
     
-    hr = IMultiLanguage2_GetRfc1766FromLcid(p, lcidLocale, &bstrRfc1766);
+    hr = IMultiLanguage2_GetRfc1766FromLcid(p, Lcid, &bstrRfc1766);
     IMultiLanguage2_Release(p);
     
     if (hr == E_INVALIDARG)
@@ -237,7 +267,7 @@ GetRfc1766FromLcid(svLocale)
         XSRETURN_EMPTY;
     }
     
-    result = wchar2sv(bstrRfc1766, wcslen(bstrRfc1766));
+    result = wchar2sv(bstrRfc1766, 0);
     
     /*
       it is not documented that the caller is responsible for freeing the bstr
@@ -247,60 +277,43 @@ GetRfc1766FromLcid(svLocale)
     XPUSHs(sv_2mortal(result));
 
 void
-GetCodePageInfo(svCodePage, svLangId)
-    SV* svCodePage
-    SV* svLangId
+GetCodePageInfo(CodePage, LangId)
+    unsigned CodePage
+    unsigned LangId
 
   PREINIT:
-    UINT uiCodePage;
-    LANGID LangId;
     MIMECPINFO cpi;
     IMultiLanguage2* p;
     HV* hv;
     HRESULT hr;
 
   PPCODE:
-    uiCodePage = SvUV(svCodePage);
-    LangId = (LANGID)SvUV(svLangId);
 
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
     
-    hr = IMultiLanguage2_GetCodePageInfo(p, uiCodePage, LangId, &cpi);
+    hr = IMultiLanguage2_GetCodePageInfo(p, CodePage, LangId, &cpi);
 
-	/* no longer needed */
+    /* no longer needed */
     IMultiLanguage2_Release(p);
 
     if (hr != S_OK)
     {
         XSRETURN_EMPTY;
     }
-    
-    hv = newHV();
-    
-    hv_store(hv, "Flags",             5, newSVuv(cpi.dwFlags),                                               0);
-    hv_store(hv, "CodePage",          8, newSVuv(cpi.uiCodePage),                                            0);
-    hv_store(hv, "FamilyCodePage",   14, newSVuv(cpi.uiFamilyCodePage),                                      0);
-    hv_store(hv, "Description",      11, wchar2sv(cpi.wszDescription, wcslen(cpi.wszDescription)),           0);
-    hv_store(hv, "WebCharset",       10, wchar2sv(cpi.wszWebCharset, wcslen(cpi.wszWebCharset)),             0);
-    hv_store(hv, "HeaderCharset",    13, wchar2sv(cpi.wszHeaderCharset, wcslen(cpi.wszHeaderCharset)),       0);
-    hv_store(hv, "BodyCharset",      11, wchar2sv(cpi.wszBodyCharset, wcslen(cpi.wszBodyCharset)),           0);
-    hv_store(hv, "FixedWidthFont",   14, wchar2sv(cpi.wszFixedWidthFont, wcslen(cpi.wszFixedWidthFont)),     0);
-    hv_store(hv, "ProportionalFont", 16, wchar2sv(cpi.wszProportionalFont, wcslen(cpi.wszProportionalFont)), 0);
-    hv_store(hv, "GDICharset",       10, newSViv(cpi.bGDICharset),                                           0);
 
+    hv = MimeCpInfo2Sv(&cpi);
+    
     XPUSHs(sv_2mortal(newRV_noinc((SV*)hv)));
 
-  /* todo: GetRfc1766Info */
-  /* todo: GetFamilyCodePage */
-
 void
-GetCodePageDescription(svCodePage, svLcid)
-    SV* svCodePage
-    SV* svLcid
+GetCodePageDescription(CodePage, Lcid = GetUserDefaultLCID())
+    unsigned CodePage
+    unsigned Lcid
 
   PREINIT:
-    UINT uiCodePage;
-    LCID lcid;
     WCHAR lpWideCharStr[MAX_MIMECP_NAME];
     int cchWideChar = MAX_MIMECP_NAME;
     IMultiLanguage2* p;
@@ -308,12 +321,12 @@ GetCodePageDescription(svCodePage, svLcid)
 
   PPCODE:
   
-    uiCodePage = SvUV(svCodePage);
-    lcid = SvUV(svLcid);
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
 
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
-
-    hr = IMultiLanguage2_GetCodePageDescription(p, uiCodePage, lcid, lpWideCharStr, cchWideChar);
+    hr = IMultiLanguage2_GetCodePageDescription(p, CodePage, Lcid, lpWideCharStr, cchWideChar);
     
     IMultiLanguage2_Release(p);
     
@@ -322,7 +335,7 @@ GetCodePageDescription(svCodePage, svLcid)
         XSRETURN_EMPTY;
     }
 
-    XPUSHs(sv_2mortal(wchar2sv(lpWideCharStr, wcslen(lpWideCharStr))));
+    XPUSHs(sv_2mortal(wchar2sv(lpWideCharStr, 0)));
   
 void
 GetCharsetInfo(svCharset)
@@ -346,7 +359,11 @@ GetCharsetInfo(svCharset)
         XSRETURN_EMPTY;
     }
     
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
+
     hr = IMultiLanguage2_GetCharsetInfo(p, bstrCharset, &csi);
 
     /* no longer needed */
@@ -359,9 +376,9 @@ GetCharsetInfo(svCharset)
     }
     
     hv = newHV();
-    hv_store(hv, "CodePage",          8, newSVuv(csi.uiCodePage),                          0);
-    hv_store(hv, "InternetEncoding", 16, newSVuv(csi.uiInternetEncoding),                  0);
-    hv_store(hv, "Charset",           7, wchar2sv(csi.wszCharset, wcslen(csi.wszCharset)), 0);
+    hv_store(hv, "CodePage",          8, newSVuv(csi.uiCodePage), 0);
+    hv_store(hv, "InternetEncoding", 16, newSVuv(csi.uiInternetEncoding), 0);
+    hv_store(hv, "Charset",           7, wchar2sv(csi.wszCharset, 0), 0);
 
     XPUSHs(sv_2mortal(newRV_noinc((SV*)hv)));
 
@@ -400,7 +417,10 @@ DetectOutboundCodePage(sv, ...)
         XSRETURN_EMPTY;
     }
     
-    MyCoCreateMlang(p, &IID_IMultiLanguage3)
+    if (CreateMlang(&p, &IID_IMultiLanguage3)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
 
     hr = IMultiLanguage3_DetectOutboundCodePage(p,
                                                 dwFlags,
@@ -413,7 +433,7 @@ DetectOutboundCodePage(sv, ...)
                                                 wcSpecialChar);
 
     /* no longer needed */
-	Safefree(lpWideCharStr);
+    Safefree(lpWideCharStr);
     IMultiLanguage3_Release(p);
 
     if (hr != S_OK || !nDetectedCodePages)
@@ -427,22 +447,22 @@ DetectOutboundCodePage(sv, ...)
     }
 
 SV*
-IsConvertible(svSrcEncoding, svDstEncoding)
-    SV* svSrcEncoding
-    SV* svDstEncoding
+IsConvertible(SrcCodePage, DstCodePage)
+    unsigned SrcCodePage
+    unsigned DstCodePage
 
   PREINIT:
-    DWORD dwSrcEncoding;
-    DWORD dwDstEncoding;
     HRESULT hr;
     IMultiLanguage2* p;
 
   CODE:
-    dwSrcEncoding = (DWORD)SvUV(svSrcEncoding);
-    dwDstEncoding = (DWORD)SvUV(svDstEncoding);
-    
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
-    hr = IMultiLanguage2_IsConvertible(p, dwSrcEncoding, dwDstEncoding);
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
+
+    hr = IMultiLanguage2_IsConvertible(p, SrcCodePage, DstCodePage);
+
     IMultiLanguage2_Release(p);
 
     if (hr == S_FALSE)
@@ -454,24 +474,25 @@ IsConvertible(svSrcEncoding, svDstEncoding)
     XSRETURN_UNDEF;
 
 void
-GetRfc1766Info(svLocale, svLangId)
-    SV* svLocale
-    SV* svLangId
+GetRfc1766Info(Lcid = GetUserDefaultLCID(), LangId = GetUserDefaultLangID())
+    unsigned Lcid
+    unsigned short LangId
 
   PREINIT:
     RFC1766INFO Rfc1766Info;
-    LCID Locale;
-    LANGID LangId;
     HRESULT hr;
     HV* hv;
     IMultiLanguage2* p;
     
   PPCODE:
-    Locale = (LCID)SvUV(svLocale);
-    LangId = (LANGID)SvUV(svLangId);
-    
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
-    hr = IMultiLanguage2_GetRfc1766Info(p, Locale, LangId, &Rfc1766Info);
+
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
+
+    hr = IMultiLanguage2_GetRfc1766Info(p, Lcid, LangId, &Rfc1766Info);
+
     IMultiLanguage2_Release(p);
     
     if (hr != S_OK)
@@ -479,12 +500,8 @@ GetRfc1766Info(svLocale, svLangId)
         XSRETURN_EMPTY;
     }
     
-    hv = newHV();
+    hv = Rfc1766Info2Sv(&Rfc1766Info);
     
-    hv_store(hv, "Lcid",        4, newSVuv(Rfc1766Info.lcid),                                              0);
-    hv_store(hv, "Rfc1766",     7, wchar2sv(Rfc1766Info.wszRfc1766, wcslen(Rfc1766Info.wszRfc1766)),       0);
-    hv_store(hv, "LocaleName", 10, wchar2sv(Rfc1766Info.wszLocaleName, wcslen(Rfc1766Info.wszLocaleName)), 0);
-
     XPUSHs(sv_2mortal(newRV_noinc((SV*)hv)));
 
 void
@@ -502,9 +519,15 @@ GetLcidFromRfc1766(svRfc1766)
   
     bstrRfc1766 = sv2wchar(svRfc1766, &len);
     
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
+
     hr = IMultiLanguage2_GetLcidFromRfc1766(p, &Locale, bstrRfc1766);
+
     IMultiLanguage2_Release(p);
+
     Safefree(bstrRfc1766);
     
     if (hr != S_FALSE && hr != S_OK)
@@ -516,19 +539,23 @@ GetLcidFromRfc1766(svRfc1766)
     XPUSHs(sv_2mortal(newSViv( hr == S_FALSE )));
 
 void
-GetFamilyCodePage(svCodePage)
-    SV* svCodePage
+GetFamilyCodePage(CodePage)
+    unsigned CodePage
+
   PREINIT:
     HRESULT hr;
     IMultiLanguage2* p;
-	UINT uiCodePage;
-	UINT uiFamilyCodePage;
+    UINT uiFamilyCodePage;
 
   PPCODE:
-    uiCodePage = SvUV(svCodePage);
-    
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
-    hr = IMultiLanguage2_GetFamilyCodePage(p, uiCodePage, &uiFamilyCodePage);
+
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
+
+    hr = IMultiLanguage2_GetFamilyCodePage(p, CodePage, &uiFamilyCodePage);
+
     IMultiLanguage2_Release(p);
     
     if (hr != S_OK)
@@ -544,11 +571,17 @@ GetNumberOfCodePageInfo()
   PREINIT:
     HRESULT hr;
     IMultiLanguage2* p;
-	UINT uiCodePage = 0;
+    UINT uiCodePage = 0;
 
   PPCODE:
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
+
     hr = IMultiLanguage2_GetNumberOfCodePageInfo(p, &uiCodePage);
+
     IMultiLanguage2_Release(p);
     
     if (hr != S_OK)
@@ -559,16 +592,123 @@ GetNumberOfCodePageInfo()
     XPUSHs(sv_2mortal(newSViv( uiCodePage )));
 
 void
+EnumCodePages(Flags = 0, LangId = GetUserDefaultLangID())
+  unsigned Flags;
+  unsigned short LangId;
+
+  PREINIT:
+    HRESULT hr;
+    IMultiLanguage2* p;
+    IEnumCodePage* pEnumCp;
+    ULONG pceltFetched;
+    MIMECPINFO cpi;
+
+  PPCODE:
+
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
+
+    hr = IMultiLanguage2_EnumCodePages(p, Flags, LangId, &pEnumCp);
+    IMultiLanguage2_Release(p);
+    
+    if (hr != S_OK) {
+      warn("Failed to get enumerator object\n");
+      XSRETURN_EMPTY;
+    }
+
+    while (S_OK == IEnumCodePage_Next(pEnumCp, 1, &cpi, &pceltFetched)) {
+      HV* svInfo = MimeCpInfo2Sv(&cpi);
+      XPUSHs(sv_2mortal(newRV_noinc((SV*)svInfo)));
+    }
+
+    IEnumCodePage_Release(pEnumCp);
+
+void
+EnumScripts(Flags = 0, LangId = GetUserDefaultLangID())
+  unsigned Flags;
+  unsigned short LangId;
+
+  PREINIT:
+    HRESULT hr;
+    IMultiLanguage2* p;
+    IEnumScript* pEnumScript;
+    ULONG pceltFetched;
+    SCRIPTINFO si;
+
+  PPCODE:
+
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
+
+    hr = IMultiLanguage2_EnumScripts(p, Flags, LangId, &pEnumScript);
+    IMultiLanguage2_Release(p);
+    
+    if (hr != S_OK) {
+      warn("Failed to get enumerator object\n");
+      XSRETURN_EMPTY;
+    }
+
+    while (S_OK == IEnumScript_Next(pEnumScript, 1, &si, &pceltFetched)) {
+      HV* svInfo = ScriptInfo2Sv(&si);
+      XPUSHs(sv_2mortal(newRV_noinc((SV*)svInfo)));
+    }
+
+    IEnumScript_Release(pEnumScript);
+
+void
+EnumRfc1766(LangId = GetUserDefaultLangID())
+  unsigned short LangId
+
+  PREINIT:
+    HRESULT hr;
+    IMultiLanguage2* p;
+    IEnumRfc1766* pEnumRfc1766;
+    ULONG pceltFetched;
+    RFC1766INFO ri;
+
+  PPCODE:
+
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
+
+    hr = IMultiLanguage2_EnumRfc1766(p, LangId, &pEnumRfc1766);
+    IMultiLanguage2_Release(p);
+    
+    if (hr != S_OK) {
+      warn("Failed to get enumerator object\n");
+      XSRETURN_EMPTY;
+    }
+
+    while (S_OK == IEnumRfc1766_Next(pEnumRfc1766, 1, &ri, &pceltFetched)) {
+      HV* svInfo = Rfc1766Info2Sv(&ri);
+      XPUSHs(sv_2mortal(newRV_noinc((SV*)svInfo)));
+    }
+
+    IEnumRfc1766_Release(pEnumRfc1766);
+
+void
 GetNumberOfScripts()
 
   PREINIT:
     HRESULT hr;
     IMultiLanguage2* p;
-	UINT nScripts = 0;
+    UINT nScripts = 0;
 
   PPCODE:
-    MyCoCreateMlang(p, &IID_IMultiLanguage2)
+
+    if (CreateMlang(&p, &IID_IMultiLanguage2)) {
+        warn("CoCreateInstance failed\n");
+        XSRETURN_EMPTY;
+    }
+
     hr = IMultiLanguage2_GetNumberOfScripts(p, &nScripts);
+
     IMultiLanguage2_Release(p);
     
     if (hr != S_OK)
@@ -578,11 +718,72 @@ GetNumberOfScripts()
     
     XPUSHs(sv_2mortal(newSViv( nScripts )));
 
+void
+Transcode(CodePageIn, CodePageOut, String, Flags)
+  unsigned CodePageIn
+  unsigned CodePageOut
+  SV* String
+  unsigned Flags
 
+  PREINIT:
+    HRESULT hr;
+    IMLangConvertCharset* p;
+    BYTE* pSrcStr;
+    BYTE* pDstStr = NULL;
+    UINT uiDstSize = 0;
+    UINT uiSrcSize;
+    SV* Result;
+
+  PPCODE:
+
+    if (SvUTF8(String) && CodePageIn != CP_UTF8) {
+      /* warn("Request to transcode UTF-8 string from non-UTF-8 code page\n"); */
+    }
+    
+    hr = CoCreateInstance(&CLSID_CMLangConvertCharset,
+      NULL, CLSCTX_ALL, &IID_IMLangConvertCharset, (VOID**)&p);
+
+    if (hr != S_OK) {
+      warn("CoCreateInstance failed\n");
+      XSRETURN_EMPTY;
+    }
+    
+    pSrcStr = SvPV(String, uiSrcSize);
+
+    hr = IMLangConvertCharset_Initialize(p, CodePageIn, CodePageOut, Flags);
+    
+    if (hr == S_OK)
+      /* While this is not documented, if uiDstSize is zero, it will receive */
+      /* the required length in bytes for the conversion to succeed (I hope) */
+      hr = IMLangConvertCharset_DoConversion(p, pSrcStr, &uiSrcSize, pDstStr, &uiDstSize);
+
+    if (hr != S_OK) {
+      IMLangConvertCharset_Release(p);
+      croak("Cannot convert between code pages\n");
+    }
+
+    Result = newSVpv("", 0);
+    pDstStr = SvGROW(Result, uiDstSize);
+
+    hr = IMLangConvertCharset_DoConversion(p, pSrcStr, &uiSrcSize, pDstStr, &uiDstSize);
+
+    IMLangConvertCharset_Release(p);
+
+    if (hr != S_OK) {
+      SvREFCNT_dec(Result);
+      XSRETURN_EMPTY;
+    }
+
+    SvCUR_set(Result, uiDstSize);
+    
+    if (CodePageOut == CP_UTF8)
+      SvUTF8_on( Result );
+
+    XPUSHs(sv_2mortal( Result ));
 
 void
 END()
   CODE:
     CoUninitialize();
-    XSRETURN_YES; /* todo: ... */
+    XSRETURN_YES; /* TODO: ... */
 

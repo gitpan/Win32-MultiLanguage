@@ -3,6 +3,7 @@ Makefile.PL
 MANIFEST
 MultiLanguage.xs
 README
-t/Win32-MultiLanguage.t
+t/01Basic.t
+t/05Transcode.t
 lib/Win32/MultiLanguage.pm
 META.yml                                 Module meta-data (added by MakeMaker)
