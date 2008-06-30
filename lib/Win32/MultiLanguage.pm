@@ -38,7 +38,7 @@ use constant MLDETECTF_PRESERVE_ORDER     => 0x00000010;
 use constant MLDETECTF_PREFERRED_ONLY     => 0x00000020;
 use constant MLDETECTF_FILTER_SPECIALCHAR => 0x00000040;
 
-our $VERSION = '0.71';
+our $VERSION = '0.72';
 
 require XSLoader;
 XSLoader::load('Win32::MultiLanguage', $VERSION);

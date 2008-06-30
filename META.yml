@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Win32-MultiLanguage
-version:             0.71
+version:             0.72
 abstract:            Interface to IMultiLanguage I18N routines
 license:             perl
 author:              
@@ -8,6 +8,7 @@ author:
 generated_by:        ExtUtils::MakeMaker version 6.44
 distribution_type:   module
 requires:     
+    perl: 5.8
 meta-spec:
     url:     http://module-build.sourceforge.net/META-spec-v1.3.html
     version: 1.3

@@ -1,5 +1,12 @@
 Revision history for Perl extension Win32::MultiLanguage.
 
+0.72  Mon Jun 30 17:54:00 2008
+	- minor fixes
+
+0.71  Sun Jun 29 17:54:00 2008
+	- minor fixes
+	- added eg/encenum.pl
+
 0.70  Sun Jun 29 16:54:00 2008
 	- added documentation for many routines
 	- added GetLcidFromRfc1766
