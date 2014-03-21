@@ -1,5 +1,8 @@
 Revision history for Perl extension Win32::MultiLanguage.
 
+0.73  March 2014
+	- fixed encoding error in POD
+
 0.72  Mon Jun 30 17:54:00 2008
 	- minor fixes
 

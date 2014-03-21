@@ -38,7 +38,7 @@ use constant MLDETECTF_PRESERVE_ORDER     => 0x00000010;
 use constant MLDETECTF_PREFERRED_ONLY     => 0x00000020;
 use constant MLDETECTF_FILTER_SPECIALCHAR => 0x00000040;
 
-our $VERSION = '0.72';
+our $VERSION = '0.73';
 
 require XSLoader;
 XSLoader::load('Win32::MultiLanguage', $VERSION);
@@ -270,7 +270,7 @@ supporting font are checked.
 
 =item MIMECONTF_MIME_IE4
 
-Value that indicates the Microsoft® Internet Explorer 4.0 MIME data
+Value that indicates the MicrosoftE<0xAE> Internet Explorer 4.0 MIME data
 from MLang's internal data should be used. 
 
 =item MIMECONTF_MIME_LATEST
@@ -359,7 +359,7 @@ via L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Win32-MultiLanguage>
 
 =head1 AUTHOR / COPYRIGHT / LICENSE
 
-  Copyright (c) 2004-2008 Bjoern Hoehrmann <bjoern@hoehrmann.de>.
+  Copyright (c) 2004-2014 Bjoern Hoehrmann <bjoern@hoehrmann.de>.
   This module is licensed under the same terms as Perl itself.
 
 =cut
